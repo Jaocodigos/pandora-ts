@@ -1,0 +1,59 @@
+import {BadRequestException, Injectable, NotFoundException} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm'
+import { Credential } from './entities/passwords.entity'
+import { AddCredentialDTO, UpdateCredentialDTO } from './schemas/passwords.dto'
+import {application} from "express";
+
+@Injectable()
+export class PasswordsService {
+
+    constructor(
+        @InjectRepository(Credential)
+        private CredRepository: Repository<Credential>,
+    ) {}
+
+    findAll(filters?: { application?: string; }): Promise<Credential[] | null> {
+        const where: any = {}
+
+        if (filters?.application) {
+            where.application = filters.application;
+        }
+
+        return this.CredRepository.find({where});
+    }
+
+    findOne(app: string): Promise<Credential | null> {
+        return this.CredRepository.findOneBy({ application: app})
+    }
+
+    async create(createCredential: AddCredentialDTO): Promise<Credential> {
+        const alreadyExist = await this.findOne(createCredential.application);
+
+        if (alreadyExist !== null) {
+            throw new BadRequestException(`A password already exists for this application.`)
+        }
+
+        const credential = this.CredRepository.create(createCredential)
+        return await this.CredRepository.save(credential)
+    }
+
+    async update(app: string, updateCredential: UpdateCredentialDTO): Promise<Credential> {
+        const credential = await this.findOne(app);
+
+        if (credential === null) {
+            throw new NotFoundException('Password not found.')
+        }
+
+        console.log(`fields: ${JSON.stringify(updateCredential)}`)
+        Object.assign(credential, updateCredential)
+        return await this.CredRepository.save(credential)
+
+    }
+
+    async delete(app: string) {
+        await this.CredRepository.delete({application: app})
+        return {status: 'success', message: 'Password deleted successfully.'};
+    }
+
+}
