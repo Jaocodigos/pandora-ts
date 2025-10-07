@@ -1,9 +1,10 @@
-import {BadRequestException, Injectable, NotFoundException} from '@nestjs/common';
+import {BadRequestException, Injectable, Inject, NotFoundException} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm'
 import { Credential } from './entities/passwords.entity'
 import { AddCredentialDTO, UpdateCredentialDTO } from './schemas/passwords.dto'
-import {application} from "express";
+import { CryptoService } from "../common/crypto/crypto.service";
+import { CRYPTO_KEY } from "../common/crypto/crypto.constants";
 
 @Injectable()
 export class PasswordsService {
@@ -11,19 +12,27 @@ export class PasswordsService {
     constructor(
         @InjectRepository(Credential)
         private CredRepository: Repository<Credential>,
+        private readonly crypto: CryptoService,
+        @Inject(CRYPTO_KEY) private readonly key: Buffer
     ) {}
 
-    findAll(filters?: { application?: string; }): Promise<Credential[] | null> {
+    async findAll(filters?: { application?: string; }): Promise<Credential[] | null> {
         const where: any = {}
 
         if (filters?.application) {
             where.application = filters.application;
         }
 
-        return this.CredRepository.find({where});
+        const credentials = await this.CredRepository.find(where);
+
+        for (let c of credentials) {
+            c.password = this.crypto.decryptData(c.password, this.key)
+        }
+
+        return credentials;
     }
 
-    findOne(app: string): Promise<Credential | null> {
+    async findOne(app: string): Promise<Credential | null> {
         return this.CredRepository.findOneBy({ application: app})
     }
 
@@ -34,6 +43,8 @@ export class PasswordsService {
             throw new BadRequestException(`A password already exists for this application.`)
         }
 
+        createCredential.password = this.crypto.encryptData(createCredential.password, this.key)
+
         const credential = this.CredRepository.create(createCredential)
         return await this.CredRepository.save(credential)
     }
@@ -43,6 +54,10 @@ export class PasswordsService {
 
         if (credential === null) {
             throw new NotFoundException('Password not found.')
+        }
+
+        if (updateCredential.password !== undefined) {
+            updateCredential.password = this.crypto.encryptData(updateCredential.password, this.key)
         }
 
         console.log(`fields: ${JSON.stringify(updateCredential)}`)

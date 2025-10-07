@@ -2,6 +2,7 @@ import {Module} from '@nestjs/common';
 import {PasswordsModule} from './passwords/passwords.module';
 import {TypeOrmModule} from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CryptoModule} from "./common/crypto/crypto.module";
 
 
 @Module({
@@ -24,6 +25,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
             }),
         }),
         PasswordsModule,
+        CryptoModule,
     ],
 })
 
